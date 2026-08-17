@@ -1,5 +1,5 @@
 {
-  "actorSpecification": 1,
+  "actorKeyValueStoreSchemaVersion": 1,
   "title": "Key-value store output",
   "description": "Schema for default key-value store output",
   "properties": {
