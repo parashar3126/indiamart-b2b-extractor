@@ -1,0 +1,30 @@
+{
+    "title": "IndiaMART Scraper Input",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "keyword": {
+            "title": "Search Keyword / Product",
+            "type": "string",
+            "description": "Product or category to search (e.g., 'Solar Panels', 'Tractor Parts')",
+            "default": "Solar Panels",
+            "editor": "textfield"
+        },
+        "city": {
+            "title": "City / Location (Optional)",
+            "type": "string",
+            "description": "Filter by city (e.g., 'Delhi', 'Ahmedabad', 'Indore')",
+            "default": "Delhi",
+            "editor": "textfield"
+        },
+        "max_results": {
+            "title": "Max Results",
+            "type": "integer",
+            "description": "Maximum number of leads to extract",
+            "default": 50,
+            "minimum": 1,
+            "maximum": 500
+        }
+    },
+    "required": ["keyword"]
+}

@@ -1,0 +1,12 @@
+{
+    "actorSpecification": 1,
+    "name": "indiamart-b2b-extractor",
+    "title": "IndiaMART B2B Suppliers & Lead Extractor",
+    "description": "Fast & lightweight asynchronous scraper to extract supplier details, products, phone numbers, and cities from IndiaMART.",
+    "version": "0.1",
+    "meta": {
+        "templateId": "python-empty"
+    },
+    "input": "./input_schema.json",
+    "dockerfile": "./Dockerfile"
+}
