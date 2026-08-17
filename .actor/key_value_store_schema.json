@@ -1,12 +1,20 @@
 {
   "actorKeyValueStoreSchemaVersion": 1,
-  "title": "Key-value store output",
-  "description": "Schema for default key-value store output",
-  "properties": {
-    "OUTPUT": {
-      "title": "Output",
-      "type": "object",
-      "description": "Scraped B2B lead generation results"
+  "title": "Key-value store schema",
+  "description": "Output schema for Key-Value store",
+  "collections": {
+    "default": {
+      "title": "Default",
+      "description": "Default collection",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "OUTPUT": {
+            "type": "object",
+            "title": "Output data"
+          }
+        }
+      }
     }
   }
 }
