@@ -5,38 +5,31 @@
     "properties": {
       "keyword": {
         "type": "string",
-        "title": "Keyword",
-        "description": "Search keyword"
+        "title": "Keyword"
       },
       "city": {
         "type": "string",
-        "title": "City",
-        "description": "Target city"
+        "title": "City"
       },
       "company_or_product": {
         "type": "string",
-        "title": "Company / Product",
-        "description": "Name of company or product"
+        "title": "Company / Product"
       },
       "price": {
         "type": "string",
-        "title": "Price",
-        "description": "Price info"
+        "title": "Price"
       },
       "phone": {
         "type": "string",
-        "title": "Phone",
-        "description": "Contact phone number"
+        "title": "Phone"
       },
       "indiamart_url": {
         "type": "string",
-        "title": "IndiaMART URL",
-        "description": "Supplier URL"
+        "title": "IndiaMART URL"
       },
       "details": {
         "type": "string",
-        "title": "Details",
-        "description": "Product details and description"
+        "title": "Details"
       }
     }
   },
