@@ -1,5 +1,6 @@
 {
   "actorSpecification": 1,
+  "title": "IndiaMART Extracted Leads",
   "fields": {
     "type": "object",
     "properties": {
