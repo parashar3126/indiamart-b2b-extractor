@@ -1,0 +1,12 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "IndiaMART Leads Output",
+  "properties": {
+    "results": {
+      "type": "string",
+      "title": "Extracted Leads",
+      "description": "Dataset containing scraped leads from IndiaMART",
+      "template": "{{links.apiDefaultDatasetUrl}}"
+    }
+  }
+}
