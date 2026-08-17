@@ -1,6 +1,17 @@
 {
   "actorSpecification": 1,
   "title": "IndiaMART Extracted Leads",
+  "fields": {
+    "type": "object",
+    "properties": {
+      "company_or_product": { "type": "string" },
+      "phone": { "type": "string" },
+      "price": { "type": "string" },
+      "city": { "type": "string" },
+      "indiamart_url": { "type": "string" },
+      "details": { "type": "string" }
+    }
+  },
   "views": {
     "overview": {
       "title": "Overview",
@@ -10,37 +21,17 @@
           "phone",
           "price",
           "city",
-          "indiamart_url",
-          "details"
+          "indiamart_url"
         ]
       },
       "display": {
         "component": "table",
         "properties": {
-          "company_or_product": {
-            "label": "Company / Product",
-            "format": "text"
-          },
-          "phone": {
-            "label": "Phone Number",
-            "format": "text"
-          },
-          "price": {
-            "label": "Price",
-            "format": "text"
-          },
-          "city": {
-            "label": "City",
-            "format": "text"
-          },
-          "indiamart_url": {
-            "label": "URL",
-            "format": "link"
-          },
-          "details": {
-            "label": "Details",
-            "format": "text"
-          }
+          "company_or_product": { "label": "Company", "format": "text" },
+          "phone": { "label": "Phone", "format": "text" },
+          "price": { "label": "Price", "format": "text" },
+          "city": { "label": "City", "format": "text" },
+          "indiamart_url": { "label": "URL", "format": "link" }
         }
       }
     }
