@@ -7,52 +7,99 @@ from bs4 import BeautifulSoup
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
 }
+
 
 async def scrape_leads(keyword: str, city: str, max_results: int):
     results = []
-    query = f"{keyword} {city}".strip()
+    query = f"{keyword} {city}".strip() if city else keyword.strip()
     encoded_query = quote_plus(query)
     url = f"https://dir.indiamart.com/search.mp?ss={encoded_query}"
 
     Actor.log.info(f"Target URL: {url}")
 
-    async with httpx.AsyncClient(headers=HEADERS, timeout=20.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        headers=HEADERS, timeout=30.0, follow_redirects=True
+    ) as client:
         try:
             response = await client.get(url)
+            Actor.log.info(
+                f"Response Status: {response.status_code}, Length: {len(response.text)} characters"
+            )
+
             if response.status_code != 200:
                 Actor.log.error(f"Failed to fetch page. Status: {response.status_code}")
                 return results
 
             soup = BeautifulSoup(response.text, "lxml")
-            listings = soup.select(".cardLinks, .g-card, .listing-card") or soup.find_all("div", class_=re.compile(r"card|listing|item", re.I))
 
-            Actor.log.info(f"Found potential listings: {len(listings)}")
+            # Broad card selectors for modern IndiaMART layouts
+            listings = soup.find_all(
+                lambda tag: tag.name in ["div", "section", "li"]
+                and tag.get("class")
+                and any(
+                    re.search(r"(card|listing|item|supplier|result|crd)", cls, re.I)
+                    for cls in tag.get("class")
+                )
+            )
+
+            Actor.log.info(f"Found {len(listings)} matching blocks on page.")
+
+            seen_names = set()
 
             for card in listings:
                 if len(results) >= max_results:
                     break
 
-                # Extract Company Name
-                title_elem = card.find(["h2", "h3", "a"], class_=re.compile(r"title|company|name", re.I))
-                company_name = title_elem.get_text(strip=True) if title_elem else "N/A"
+                # Extract Company/Title
+                name_elem = card.find(
+                    ["h2", "h3", "h4", "a", "span"],
+                    class_=re.compile(r"company|name|title|cnm|supplier", re.I),
+                )
+                company_name = name_elem.get_text(strip=True) if name_elem else ""
 
-                if company_name == "N/A" or len(company_name) < 3:
+                if (
+                    not company_name
+                    or len(company_name) < 3
+                    or company_name in seen_names
+                ):
                     continue
 
-                # Extract Price / Product
-                price_elem = card.find(class_=re.compile(r"price|prc", re.I))
-                price = price_elem.get_text(strip=True) if price_elem else "Contact Supplier"
+                seen_names.add(company_name)
+
+                # Extract Price / Product Detail
+                price_elem = card.find(class_=re.compile(r"price|prc|cost|rate", re.I))
+                price = (
+                    price_elem.get_text(strip=True)
+                    if price_elem
+                    else "Contact Supplier"
+                )
 
                 # Extract Location / City
-                loc_elem = card.find(class_=re.compile(r"city|location|address", re.I))
-                location = loc_elem.get_text(strip=True) if loc_elem else city
+                loc_elem = card.find(class_=re.compile(r"city|loc|address|cty", re.I))
+                location = (
+                    loc_elem.get_text(strip=True) if loc_elem else (city or "India")
+                )
 
-                # Extract Contact / Phone number
-                phone_elem = card.find(class_=re.compile(r"phone|contact|mobile|pns", re.I))
-                phone = phone_elem.get_text(strip=True) if phone_elem else "Available on request"
+                # Extract Phone / Contact
+                phone_elem = card.find(
+                    class_=re.compile(r"phone|pns|contact|mobile|call", re.I)
+                )
+                phone = (
+                    phone_elem.get_text(strip=True)
+                    if phone_elem
+                    else "Available on request"
+                )
 
                 # Extract Supplier Link
                 link_elem = card.find("a", href=True)
@@ -61,12 +108,12 @@ async def scrape_leads(keyword: str, city: str, max_results: int):
                     supplier_url = f"https://www.indiamart.com{supplier_url}"
 
                 lead_data = {
-                    "keyword": keyword,
+                    "search_query": query,
                     "company_name": company_name,
                     "price_or_service": price,
                     "location": location,
-                    "phone": phone,
-                    "supplier_url": supplier_url
+                    "contact_phone": phone,
+                    "supplier_url": supplier_url,
                 }
 
                 results.append(lead_data)
@@ -76,22 +123,26 @@ async def scrape_leads(keyword: str, city: str, max_results: int):
 
     return results
 
+
 async def main():
     async with Actor:
         actor_input = await Actor.get_input() or {}
         keyword = actor_input.get("keyword", "Solar Panels")
-        city = actor_input.get("city", "Delhi")
-        max_results = int(actor_input.get("max_results", 50))
+        city = actor_input.get("city", "")
+        max_results = int(actor_input.get("max_results", 20))
 
-        Actor.log.info(f"Starting IndiaMART B2B Extractor for '{keyword}' in '{city}'...")
+        Actor.log.info(
+            f"Extracting leads for query: '{keyword}', City: '{city}' (Limit: {max_results})"
+        )
 
         leads = await scrape_leads(keyword, city, max_results)
 
         if leads:
             await Actor.push_data(leads)
-            Actor.log.info(f"Successfully scraped and pushed {len(leads)} leads.")
+            Actor.log.info(f"Pushed {len(leads)} leads to Apify dataset.")
         else:
             Actor.log.warning("No leads found. Check selectors or query.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
