@@ -1,40 +1,43 @@
 {
   "actorSpecification": 1,
   "fields": {
-    "keyword": {
-      "type": "string",
-      "title": "Keyword",
-      "description": "Search keyword"
-    },
-    "city": {
-      "type": "string",
-      "title": "City",
-      "description": "Target city"
-    },
-    "company_or_product": {
-      "type": "string",
-      "title": "Company / Product",
-      "description": "Name of company or product"
-    },
-    "price": {
-      "type": "string",
-      "title": "Price",
-      "description": "Price info"
-    },
-    "phone": {
-      "type": "string",
-      "title": "Phone",
-      "description": "Contact phone number"
-    },
-    "indiamart_url": {
-      "type": "string",
-      "title": "IndiaMART URL",
-      "description": "Supplier URL"
-    },
-    "details": {
-      "type": "string",
-      "title": "Details",
-      "description": "Product details and description"
+    "type": "object",
+    "properties": {
+      "keyword": {
+        "type": "string",
+        "title": "Keyword",
+        "description": "Search keyword"
+      },
+      "city": {
+        "type": "string",
+        "title": "City",
+        "description": "Target city"
+      },
+      "company_or_product": {
+        "type": "string",
+        "title": "Company / Product",
+        "description": "Name of company or product"
+      },
+      "price": {
+        "type": "string",
+        "title": "Price",
+        "description": "Price info"
+      },
+      "phone": {
+        "type": "string",
+        "title": "Phone",
+        "description": "Contact phone number"
+      },
+      "indiamart_url": {
+        "type": "string",
+        "title": "IndiaMART URL",
+        "description": "Supplier URL"
+      },
+      "details": {
+        "type": "string",
+        "title": "Details",
+        "description": "Product details and description"
+      }
     }
   },
   "views": {
