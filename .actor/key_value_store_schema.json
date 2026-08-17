@@ -1,0 +1,12 @@
+{
+  "actorSpecification": 1,
+  "title": "Key-value store output",
+  "description": "Schema for default key-value store output",
+  "properties": {
+    "OUTPUT": {
+      "title": "Output",
+      "type": "object",
+      "description": "Scraped B2B lead generation results"
+    }
+  }
+}
