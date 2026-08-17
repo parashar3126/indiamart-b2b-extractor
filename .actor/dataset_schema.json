@@ -1,38 +1,6 @@
 {
   "actorSpecification": 1,
-  "fields": {
-    "type": "object",
-    "properties": {
-      "keyword": {
-        "type": "string",
-        "title": "Keyword"
-      },
-      "city": {
-        "type": "string",
-        "title": "City"
-      },
-      "company_or_product": {
-        "type": "string",
-        "title": "Company / Product"
-      },
-      "price": {
-        "type": "string",
-        "title": "Price"
-      },
-      "phone": {
-        "type": "string",
-        "title": "Phone"
-      },
-      "indiamart_url": {
-        "type": "string",
-        "title": "IndiaMART URL"
-      },
-      "details": {
-        "type": "string",
-        "title": "Details"
-      }
-    }
-  },
+  "title": "IndiaMART Extracted Leads",
   "views": {
     "overview": {
       "title": "Overview",
@@ -42,7 +10,8 @@
           "phone",
           "price",
           "city",
-          "indiamart_url"
+          "indiamart_url",
+          "details"
         ]
       },
       "display": {
@@ -53,7 +22,7 @@
             "format": "text"
           },
           "phone": {
-            "label": "Phone",
+            "label": "Phone Number",
             "format": "text"
           },
           "price": {
@@ -67,6 +36,10 @@
           "indiamart_url": {
             "label": "URL",
             "format": "link"
+          },
+          "details": {
+            "label": "Details",
+            "format": "text"
           }
         }
       }
