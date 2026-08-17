@@ -2,7 +2,6 @@
 .gitignore
 export_code.py
 project_code_bundle.txt
-*.txt
 storage
 venv
 .venv
