@@ -1,0 +1,19 @@
+# Export scripts & bundles
+export_code.py
+project_code_bundle.txt
+*.txt
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Environment & OS files
+.env
+.DS_Store
+Thumbs.db
+
+# Apify local storage
+storage/
