@@ -18,12 +18,12 @@
             "editor": "textfield"
         },
         "max_results": {
-            "title": "Max Results",
+            "title": "Maximum Results",
             "type": "integer",
-            "description": "Maximum number of leads to extract",
-            "default": 50,
+            "description": "Total number of leads you want to extract.",
+            "default": 100,
             "minimum": 1,
-            "maximum": 500
+            "maximum": 5000
         }
     },
     "required": ["keyword"]
