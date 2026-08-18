@@ -13,209 +13,196 @@ HEADERS = {
 }
 
 
-def parse_page_results(soup: BeautifulSoup, keyword: str, city: str, seen_urls: set):
+def parse_page_results(soup: BeautifulSoup, keyword: str, city: str, seen_urls: set, seen_names: set):
     page_leads = []
 
-    # 1. Parse Standard HTML View
-    result_elements = soup.select(".result")
-    if result_elements:
-        for item in result_elements:
-            title_elem = item.select_one(".result__title .result__a")
-            snippet_elem = item.select_one(".result__snippet")
+    # 1. Parse Standard HTML (.result)
+    for item in soup.select(".result"):
+        title_elem = item.select_one(".result__title .result__a")
+        snippet_elem = item.select_one(".result__snippet")
 
-            if not title_elem:
-                continue
+        if not title_elem:
+            continue
 
-            href = title_elem.get("href", "")
-            actual_url = href
-            if "uddg=" in href:
-                match = re.search(r"uddg=([^&]+)", href)
-                if match:
-                    actual_url = unquote(match.group(1))
+        href = title_elem.get("href", "")
+        actual_url = href
+        if "uddg=" in href:
+            match = re.search(r"uddg=([^&]+)", href)
+            if match:
+                actual_url = unquote(match.group(1))
 
-            if actual_url in seen_urls or "indiamart.com" not in actual_url:
-                continue
-            seen_urls.add(actual_url)
+        if actual_url in seen_urls or "indiamart.com" not in actual_url:
+            continue
 
-            raw_title = title_elem.get_text(strip=True)
-            raw_snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+        raw_title = title_elem.get_text(strip=True)
+        raw_snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
 
-            clean_name = re.sub(
-                r"\s*-\s*IndiaMART.*$", "", raw_title, flags=re.IGNORECASE
-            )
-            clean_name = re.sub(
-                r"(Manufacturers|Suppliers|Wholesale|Dealers|Exporters|Wholesaler|Retailer)\s+in.*$",
-                "",
-                clean_name,
-                flags=re.IGNORECASE,
-            ).strip()
+        clean_name = re.sub(r"\s*-\s*IndiaMART.*$", "", raw_title, flags=re.IGNORECASE)
+        clean_name = re.sub(
+            r"(Manufacturers|Suppliers|Wholesale|Dealers|Exporters|Wholesaler|Retailer|Trader)\s+in.*$",
+            "",
+            clean_name,
+            flags=re.IGNORECASE,
+        ).strip()
 
-            phone_match = re.search(r"(\+91[-\s]?)?[6-9]\d{9}", raw_snippet)
-            phone = phone_match.group(0) if phone_match else "Available on profile"
+        norm_name = clean_name.lower().strip()
+        if not clean_name or len(clean_name) < 3 or norm_name in seen_names:
+            continue
 
-            price_match = re.search(r"(₹\s*[\d,]+|Rs\.?\s*[\d,]+)", raw_snippet)
-            price = price_match.group(0) if price_match else "Price on Inquiry"
+        seen_urls.add(actual_url)
+        seen_names.add(norm_name)
 
-            page_leads.append(
-                {
-                    "company_or_product": clean_name or raw_title,
-                    "phone": phone,
-                    "price": price,
-                    "city": city if city else "All India",
-                    "indiamart_url": actual_url,
-                    "details": raw_snippet,
-                }
-            )
+        phone_match = re.search(r"(\+91[-\s]?)?[6-9]\d{9}", raw_snippet)
+        phone = phone_match.group(0) if phone_match else "Available on profile"
 
-    # 2. Parse Lite View
-    lite_links = soup.select(".result-link")
-    if lite_links:
-        for a_tag in lite_links:
-            href = a_tag.get("href", "")
-            actual_url = href
-            if "uddg=" in href:
-                match = re.search(r"uddg=([^&]+)", href)
-                if match:
-                    actual_url = unquote(match.group(1))
+        price_match = re.search(r"(₹\s*[\d,]+|Rs\.?\s*[\d,]+)", raw_snippet)
+        price = price_match.group(0) if price_match else "Price on Inquiry"
 
-            if actual_url in seen_urls or "indiamart.com" not in actual_url:
-                continue
-            seen_urls.add(actual_url)
+        page_leads.append({
+            "company_or_product": clean_name,
+            "phone": phone,
+            "price": price,
+            "city": city if city else "All India",
+            "indiamart_url": actual_url,
+            "details": raw_snippet,
+        })
 
-            raw_title = a_tag.get_text(strip=True)
-            parent_tr = a_tag.find_parent("tr")
-            raw_snippet = ""
-            if parent_tr:
-                next_tr = parent_tr.find_next_sibling("tr")
-                if next_tr:
-                    snippet_td = next_tr.select_one(".result-snippet")
-                    if snippet_td:
-                        raw_snippet = snippet_td.get_text(strip=True)
+    # 2. Parse Lite HTML (.result-link)
+    for a_tag in soup.select(".result-link"):
+        href = a_tag.get("href", "")
+        actual_url = href
+        if "uddg=" in href:
+            match = re.search(r"uddg=([^&]+)", href)
+            if match:
+                actual_url = unquote(match.group(1))
 
-            clean_name = re.sub(
-                r"\s*-\s*IndiaMART.*$", "", raw_title, flags=re.IGNORECASE
-            ).strip()
-            clean_name = re.sub(
-                r"(Manufacturers|Suppliers|Wholesale|Dealers|Exporters|Wholesaler|Retailer)\s+in.*$",
-                "",
-                clean_name,
-                flags=re.IGNORECASE,
-            ).strip()
+        if actual_url in seen_urls or "indiamart.com" not in actual_url:
+            continue
 
-            phone_match = re.search(r"(\+91[-\s]?)?[6-9]\d{9}", raw_snippet)
-            phone = phone_match.group(0) if phone_match else "Available on profile"
+        raw_title = a_tag.get_text(strip=True)
+        parent_tr = a_tag.find_parent("tr")
+        raw_snippet = ""
+        if parent_tr:
+            next_tr = parent_tr.find_next_sibling("tr")
+            if next_tr:
+                snippet_td = next_tr.select_one(".result-snippet")
+                if snippet_td:
+                    raw_snippet = snippet_td.get_text(strip=True)
 
-            price_match = re.search(r"(₹\s*[\d,]+|Rs\.?\s*[\d,]+)", raw_snippet)
-            price = price_match.group(0) if price_match else "Price on Inquiry"
+        clean_name = re.sub(r"\s*-\s*IndiaMART.*$", "", raw_title, flags=re.IGNORECASE)
+        clean_name = re.sub(
+            r"(Manufacturers|Suppliers|Wholesale|Dealers|Exporters|Wholesaler|Retailer|Trader)\s+in.*$",
+            "",
+            clean_name,
+            flags=re.IGNORECASE,
+        ).strip()
 
-            page_leads.append(
-                {
-                    "company_or_product": clean_name or raw_title,
-                    "phone": phone,
-                    "price": price,
-                    "city": city if city else "All India",
-                    "indiamart_url": actual_url,
-                    "details": raw_snippet,
-                }
-            )
+        norm_name = clean_name.lower().strip()
+        if not clean_name or len(clean_name) < 3 or norm_name in seen_names:
+            continue
+
+        seen_urls.add(actual_url)
+        seen_names.add(norm_name)
+
+        phone_match = re.search(r"(\+91[-\s]?)?[6-9]\d{9}", raw_snippet)
+        phone = phone_match.group(0) if phone_match else "Available on profile"
+
+        price_match = re.search(r"(₹\s*[\d,]+|Rs\.?\s*[\d,]+)", raw_snippet)
+        price = price_match.group(0) if price_match else "Price on Inquiry"
+
+        page_leads.append({
+            "company_or_product": clean_name,
+            "phone": phone,
+            "price": price,
+            "city": city if city else "All India",
+            "indiamart_url": actual_url,
+            "details": raw_snippet,
+        })
 
     return page_leads
 
 
-async def extract_indiamart_leads(
-    keyword: str, city: str, max_results: int, proxy_url: str = None
-):
+def generate_search_queries(keyword: str, city: str):
+    clean_k = keyword.replace('"', '').strip()
+    clean_c = city.replace('"', '').strip() if city else ""
+
+    if clean_c:
+        return [
+            f"site:indiamart.com {clean_k} {clean_c}",
+            f"site:indiamart.com {clean_k} suppliers in {clean_c}",
+            f"site:indiamart.com {clean_k} manufacturers {clean_c}",
+            f"site:indiamart.com {clean_k} wholesale dealer {clean_c}",
+            f"site:indiamart.com {clean_k} contact phone {clean_c}",
+            f"site:indiamart.com {clean_k} distributors {clean_c}",
+        ]
+    else:
+        return [
+            f"site:indiamart.com {clean_k}",
+            f"site:indiamart.com {clean_k} manufacturers India",
+            f"site:indiamart.com {clean_k} wholesale suppliers",
+            f"site:indiamart.com {clean_k} exporters dealers",
+            f"site:indiamart.com {clean_k} contact price list",
+        ]
+
+
+async def extract_indiamart_leads(keyword: str, city: str, max_results: int, proxy_url: str = None):
     results = []
     seen_urls = set()
+    seen_names = set()
 
-    # Broad query without restrictive double quotes
-    clean_keyword = keyword.replace('"', "").strip()
-    clean_city = city.replace('"', "").strip() if city else ""
-
-    query = (
-        f"site:indiamart.com {clean_keyword} {clean_city}".strip()
-        if clean_city
-        else f"site:indiamart.com {clean_keyword}".strip()
-    )
-
-    Actor.log.info(f"Optimized Query: {query}")
-    Actor.log.info(f"Target Count: {max_results} leads")
-
-    search_url = "https://lite.duckduckgo.com/lite/"
-    form_data = {"q": query, "kl": "in-en"}
+    queries = generate_search_queries(keyword, city)
+    Actor.log.info(f"Generated {len(queries)} B2B search streams for '{keyword}'. Target: {max_results} leads.")
 
     client_kwargs = {
         "headers": HEADERS,
-        "timeout": 30.0,
+        "timeout": 25.0,
         "follow_redirects": True,
     }
     if proxy_url:
         client_kwargs["proxy"] = proxy_url
 
     async with httpx.AsyncClient(**client_kwargs) as client:
-        page_num = 1
-
-        while len(results) < max_results:
-            try:
-                Actor.log.info(f"Fetching page {page_num}...")
-                response = await client.post(
-                    search_url, data=form_data, headers=HEADERS
-                )
-
-                if response.status_code != 200 or len(response.text) < 400:
-                    Actor.log.warning(
-                        f"Response status: {response.status_code}. Retrying with GET fallback..."
-                    )
-                    response = await client.get(
-                        "https://html.duckduckgo.com/html/",
-                        params={"q": query},
-                        headers=HEADERS,
-                    )
-
-                soup = BeautifulSoup(response.text, "lxml")
-                page_new_leads = parse_page_results(
-                    soup, clean_keyword, clean_city, seen_urls
-                )
-
-                if not page_new_leads:
-                    Actor.log.info("No more matching leads found.")
-                    break
-
-                for lead in page_new_leads:
-                    if len(results) >= max_results:
-                        break
-                    results.append(lead)
-
-                await Actor.push_data(page_new_leads)
-                Actor.log.info(
-                    f"Page {page_num}: Added {len(page_new_leads)} leads (Total: {len(results)}/{max_results})"
-                )
-
-                # Handle Next Page
-                next_form = soup.select_one(
-                    "form[action='/lite/'], form.nav-link, .nav-link form"
-                )
-                if not next_form:
-                    Actor.log.info("Reached end of search results.")
-                    break
-
-                next_data = {}
-                for input_tag in next_form.select("input"):
-                    name = input_tag.get("name")
-                    value = input_tag.get("value", "")
-                    if name:
-                        next_data[name] = value
-
-                if not next_data or next_data == form_data:
-                    break
-
-                form_data = next_data
-                page_num += 1
-                await asyncio.sleep(1.2)
-
-            except Exception as e:
-                Actor.log.error(f"Error on page {page_num}: {str(e)}")
+        for q_idx, q in enumerate(queries, 1):
+            if len(results) >= max_results:
                 break
+
+            Actor.log.info(f"Running search stream [{q_idx}/{len(queries)}]: {q}")
+
+            # Try page offsets (0, 30, 60) for each query stream
+            for offset in [0, 30, 60]:
+                if len(results) >= max_results:
+                    break
+
+                try:
+                    payload = {"q": q, "kl": "in-en"}
+                    if offset > 0:
+                        payload["s"] = str(offset)
+                        payload["next"] = "Next Page"
+
+                    response = await client.post("https://lite.duckduckgo.com/lite/", data=payload)
+
+                    if response.status_code != 200 or len(response.text) < 400:
+                        response = await client.get("https://html.duckduckgo.com/html/", params={"q": q})
+
+                    soup = BeautifulSoup(response.text, "lxml")
+                    new_leads = parse_page_results(soup, keyword, city, seen_urls, seen_names)
+
+                    if not new_leads:
+                        break
+
+                    for lead in new_leads:
+                        if len(results) >= max_results:
+                            break
+                        results.append(lead)
+
+                    await Actor.push_data(new_leads)
+                    Actor.log.info(f"Stream {q_idx} (Offset {offset}): Added {len(new_leads)} unique leads. (Total: {len(results)}/{max_results})")
+
+                    await asyncio.sleep(1.0)
+
+                except Exception as e:
+                    Actor.log.warning(f"Stream {q_idx} error: {e}")
+                    break
 
     return results
 
@@ -235,11 +222,11 @@ async def main():
         except Exception:
             pass
 
-        Actor.log.info(f"Starting extraction for '{keyword}' in '{city}'...")
+        Actor.log.info(f"Starting Multi-Stream Extractor for '{keyword}' in '{city}' (Target: {max_results})...")
         leads = await extract_indiamart_leads(keyword, city, max_results, proxy_url)
 
         if leads:
-            Actor.log.info(f"Extraction successful: {len(leads)} leads saved.")
+            Actor.log.info(f"Job completed successfully. Total unique leads: {len(leads)}")
         else:
             Actor.log.warning("No leads found.")
 
