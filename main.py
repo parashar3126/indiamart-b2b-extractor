@@ -1,161 +1,148 @@
 import asyncio
 import re
-from urllib.parse import unquote
+from urllib.parse import unquote, quote_plus
 from apify import Actor
 import httpx
 from bs4 import BeautifulSoup
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
 }
 
 
-def build_query_variations(keyword: str, city: str):
-    k = keyword.strip()
-    c = city.strip() if city else ""
-
-    variations = [
-        f"site:indiamart.com {k} {c}",
-        f"site:indiamart.com {k} suppliers {c}",
-        f"site:indiamart.com {k} manufacturers {c}",
-        f"site:indiamart.com {k} dealers {c}",
-        f"site:indiamart.com {k} wholesale {c}",
-        f"site:indiamart.com {k} spare parts {c}",
-        f"site:indiamart.com {k} distributors {c}",
-        f"site:indiamart.com {k} traders {c}",
-        f"site:indiamart.com {k} retail shop {c}",
-        f"site:indiamart.com/company/ {k} {c}",
-        f"site:indiamart.com/proddetail/ {k} {c}",
-        f"site:indiamart.com {k} contact phone {c}",
-    ]
-    return [v.strip() for v in variations]
-
-
-def parse_leads_from_html(
-    html_content: str, city: str, seen_urls: set, seen_names: set
+def extract_leads_from_directory_html(
+    html: str, default_city: str, seen_urls: set, seen_names: set
 ):
+    """Deep extracts individual supplier cards from IndiaMART directory and catalog pages."""
     leads = []
-    soup = BeautifulSoup(html_content, "lxml")
+    soup = BeautifulSoup(html, "lxml")
 
-    # DuckDuckGo HTML / Lite parser
-    entries = soup.select(".result, .result-link")
+    # Match all supplier cards/listings on IndiaMART directory pages
+    card_elements = soup.select(
+        ".card, .lst_cl, .r-cl, .listing-card, .gACard, .prd-card, "
+        "div[class*='card'], div[class*='listing'], div[class*='supplier']"
+    )
 
-    # If standard result cards exist
-    results = soup.select(".result")
-    if results:
-        for item in results:
-            title_el = item.select_one(".result__title .result__a")
-            snippet_el = item.select_one(".result__snippet")
-            if not title_el:
-                continue
+    for card in card_elements:
+        title_el = card.select_one(
+            ".gpName, .company-name, .cName, .to-be-titl, h2 a, h3 a, a[href*='indiamart.com']"
+        )
+        if not title_el:
+            continue
 
-            raw_url = title_el.get("href", "")
-            if "uddg=" in raw_url:
-                m = re.search(r"uddg=([^&]+)", raw_url)
-                if m:
-                    raw_url = unquote(m.group(1))
+        raw_url = title_el.get("href", "")
+        if raw_url.startswith("//"):
+            raw_url = "https:" + raw_url
+        elif raw_url.startswith("/"):
+            raw_url = "https://www.indiamart.com" + raw_url
 
-            if "indiamart.com" not in raw_url or raw_url in seen_urls:
-                continue
+        if "buyer.indiamart.com" in raw_url or "javascript:" in raw_url:
+            continue
 
-            raw_title = title_el.get_text(strip=True)
-            raw_snippet = snippet_el.get_text(strip=True) if snippet_el else ""
+        raw_title = title_el.get_text(strip=True)
+        clean_name = re.sub(r"\s*-\s*IndiaMART.*$", "", raw_title, flags=re.IGNORECASE)
+        clean_name = re.sub(
+            r"(Manufacturers|Suppliers|Wholesale|Dealers|Exporters|Trader|Distributor)\s+in.*$",
+            "",
+            clean_name,
+            flags=re.IGNORECASE,
+        ).strip()
 
-            # Clean Name
-            name = re.sub(r"\s*-\s*IndiaMART.*$", "", raw_title, flags=re.IGNORECASE)
-            name = re.sub(
-                r"(Manufacturers|Suppliers|Wholesale|Dealers|Exporters|Trader|Distributor)\s+in.*$",
-                "",
-                name,
-                flags=re.IGNORECASE,
-            ).strip()
-            norm = name.lower().strip()
+        norm_name = clean_name.lower().strip()
+        if not clean_name or len(clean_name) < 3 or norm_name in seen_names:
+            continue
 
-            if not name or len(name) < 3 or norm in seen_names:
-                continue
+        # Extract Snippet / Product Details
+        desc_el = card.select_one(
+            ".desc, .desc-txt, .specs, .product-desc, .snippet, p"
+        )
+        card_text = card.get_text(" ", strip=True)
+        raw_snippet = desc_el.get_text(strip=True) if desc_el else card_text[:200]
 
+        # Extract Phone
+        phone_match = re.search(r"(\+91[-\s]?)?[6-9]\d{9}", card_text)
+        phone = phone_match.group(0) if phone_match else "Available on profile"
+
+        # Extract Price
+        price_match = re.search(r"(₹\s*[\d,]+|Rs\.?\s*[\d,]+)", card_text)
+        price = price_match.group(0) if price_match else "Price on Inquiry"
+
+        # Extract Location / City
+        city_el = card.select_one(".city, .cityName, .loc, .address, .city-name")
+        found_city = city_el.get_text(strip=True) if city_el else default_city
+
+        seen_names.add(norm_name)
+        if raw_url:
             seen_urls.add(raw_url)
-            seen_names.add(norm)
 
-            phone_match = re.search(
-                r"(\+91[-\s]?)?[6-9]\d{9}", raw_snippet + " " + raw_title
-            )
-            phone = phone_match.group(0) if phone_match else "Available on profile"
-
-            price_match = re.search(r"(₹\s*[\d,]+|Rs\.?\s*[\d,]+)", raw_snippet)
-            price = price_match.group(0) if price_match else "Price on Inquiry"
-
-            leads.append(
-                {
-                    "company_or_product": name,
-                    "phone": phone,
-                    "price": price,
-                    "city": city if city else "All India",
-                    "indiamart_url": raw_url,
-                    "details": (
-                        raw_snippet if raw_snippet else f"{name} listed on IndiaMART"
-                    ),
-                }
-            )
-
-    # Lite view fallback
-    lite_links = soup.select(".result-link")
-    if lite_links and not leads:
-        for a_tag in lite_links:
-            raw_url = a_tag.get("href", "")
-            if "uddg=" in raw_url:
-                m = re.search(r"uddg=([^&]+)", raw_url)
-                if m:
-                    raw_url = unquote(m.group(1))
-
-            if "indiamart.com" not in raw_url or raw_url in seen_urls:
-                continue
-
-            raw_title = a_tag.get_text(strip=True)
-            parent_tr = a_tag.find_parent("tr")
-            raw_snippet = ""
-            if parent_tr:
-                next_tr = parent_tr.find_next_sibling("tr")
-                if next_tr:
-                    snip_td = next_tr.select_one(".result-snippet")
-                    if snip_td:
-                        raw_snippet = snip_td.get_text(strip=True)
-
-            name = re.sub(
-                r"\s*-\s*IndiaMART.*$", "", raw_title, flags=re.IGNORECASE
-            ).strip()
-            norm = name.lower().strip()
-
-            if not name or len(name) < 3 or norm in seen_names:
-                continue
-
-            seen_urls.add(raw_url)
-            seen_names.add(norm)
-
-            phone_match = re.search(
-                r"(\+91[-\s]?)?[6-9]\d{9}", raw_snippet + " " + raw_title
-            )
-            phone = phone_match.group(0) if phone_match else "Available on profile"
-
-            price_match = re.search(r"(₹\s*[\d,]+|Rs\.?\s*[\d,]+)", raw_snippet)
-            price = price_match.group(0) if price_match else "Price on Inquiry"
-
-            leads.append(
-                {
-                    "company_or_product": name,
-                    "phone": phone,
-                    "price": price,
-                    "city": city if city else "All India",
-                    "indiamart_url": raw_url,
-                    "details": (
-                        raw_snippet if raw_snippet else f"{name} listed on IndiaMART"
-                    ),
-                }
-            )
+        leads.append(
+            {
+                "company_or_product": clean_name,
+                "phone": phone,
+                "price": price,
+                "city": found_city if found_city else (default_city or "All India"),
+                "indiamart_url": raw_url if raw_url else "https://www.indiamart.com",
+                "details": raw_snippet,
+            }
+        )
 
     return leads
+
+
+async def collect_directory_urls(client: httpx.AsyncClient, keyword: str, city: str):
+    """Collects all IndiaMART category and city index URLs via search queries."""
+    clean_k = keyword.replace('"', "").strip()
+    clean_c = city.replace('"', "").strip() if city else ""
+
+    queries = [
+        f"site:dir.indiamart.com {clean_k} {clean_c}",
+        f"site:indiamart.com {clean_k} {clean_c}",
+        f"site:indiamart.com/company/ {clean_k} {clean_c}",
+        f"site:indiamart.com {clean_k} suppliers {clean_c}",
+        f"site:indiamart.com {clean_k} manufacturers {clean_c}",
+        f"site:indiamart.com {clean_k} wholesale {clean_c}",
+    ]
+
+    found_urls = []
+    seen_search_urls = set()
+
+    for q in queries:
+        try:
+            resp = await client.post(
+                "https://lite.duckduckgo.com/lite/", data={"q": q, "kl": "in-en"}
+            )
+            if resp.status_code != 200:
+                resp = await client.post(
+                    "https://html.duckduckgo.com/html/", data={"q": q}
+                )
+
+            soup = BeautifulSoup(resp.text, "lxml")
+            for a_tag in soup.select(".result-link, .result__a"):
+                href = a_tag.get("href", "")
+                if "uddg=" in href:
+                    m = re.search(r"uddg=([^&]+)", href)
+                    if m:
+                        href = unquote(m.group(1))
+
+                if (
+                    "indiamart.com" in href
+                    and "buyer.indiamart.com" not in href
+                    and href not in seen_search_urls
+                ):
+                    seen_search_urls.add(href)
+                    found_urls.append(href)
+
+            await asyncio.sleep(0.8)
+        except Exception:
+            continue
+
+    # Also directly append IndiaMART city directory URL
+    direct_dir_url = f"https://dir.indiamart.com/search.mp?ss={quote_plus(clean_k)}&cq={quote_plus(clean_c)}"
+    found_urls.insert(0, direct_dir_url)
+
+    return found_urls
 
 
 async def main():
@@ -166,13 +153,8 @@ async def main():
         max_results = int(actor_input.get("max_results", 100))
 
         Actor.log.info(
-            f"Target: Extracting all '{keyword}' leads in '{city}' (Target: {max_results})"
+            f"Target: Extracting full B2B leads for '{keyword}' in '{city}' (Target: {max_results})"
         )
-
-        queries = build_query_variations(keyword, city)
-        seen_urls = set()
-        seen_names = set()
-        all_leads = []
 
         proxy_url = None
         try:
@@ -182,56 +164,69 @@ async def main():
         except Exception:
             pass
 
-        client_kwargs = {"headers": HEADERS, "timeout": 25.0, "follow_redirects": True}
+        client_kwargs = {
+            "headers": HEADERS,
+            "timeout": 25.0,
+            "follow_redirects": True,
+        }
         if proxy_url:
             client_kwargs["proxy"] = proxy_url
 
+        seen_urls = set()
+        seen_names = set()
+        total_leads = []
+
         async with httpx.AsyncClient(**client_kwargs) as client:
-            for idx, q in enumerate(queries, 1):
-                if len(all_leads) >= max_results:
+            Actor.log.info(
+                "Harvesting IndiaMART category & supplier directory pages..."
+            )
+            directory_urls = await collect_directory_urls(client, keyword, city)
+            Actor.log.info(
+                f"Found {len(directory_urls)} IndiaMART directories. Deep scraping supplier listings..."
+            )
+
+            for idx, page_url in enumerate(directory_urls, 1):
+                if len(total_leads) >= max_results:
                     break
 
-                Actor.log.info(f"[{idx}/{len(queries)}] Scraping stream: {q}")
+                Actor.log.info(
+                    f"[{idx}/{len(directory_urls)}] Deep scraping: {page_url}"
+                )
                 try:
-                    # Request HTML endpoint
-                    resp = await client.post(
-                        "https://html.duckduckgo.com/html/", data={"q": q}
-                    )
+                    resp = await client.get(page_url, timeout=20.0)
                     if resp.status_code != 200:
-                        resp = await client.post(
-                            "https://lite.duckduckgo.com/lite/",
-                            data={"q": q, "kl": "in-en"},
-                        )
+                        continue
 
-                    batch_leads = parse_leads_from_html(
+                    # Extract all cards from directory page
+                    extracted = extract_leads_from_directory_html(
                         resp.text, city, seen_urls, seen_names
                     )
 
-                    if batch_leads:
-                        valid_batch = []
-                        for lead in batch_leads:
-                            if len(all_leads) >= max_results:
+                    if extracted:
+                        batch = []
+                        for lead in extracted:
+                            if len(total_leads) >= max_results:
                                 break
-                            valid_batch.append(lead)
-                            all_leads.append(lead)
+                            batch.append(lead)
+                            total_leads.append(lead)
 
-                        await Actor.push_data(valid_batch)
+                        await Actor.push_data(batch)
                         Actor.log.info(
-                            f"Stream {idx} extracted {len(valid_batch)} new leads. Total: {len(all_leads)}/{max_results}"
+                            f"Extracted {len(batch)} suppliers from page {idx}. Total: {len(total_leads)}/{max_results}"
                         )
 
                     await asyncio.sleep(1.0)
 
-                except Exception as e:
-                    Actor.log.warning(f"Error on stream {idx}: {e}")
+                except Exception as err:
+                    Actor.log.warning(f"Error scraping {page_url}: {err}")
                     continue
 
-        if all_leads:
+        if total_leads:
             Actor.log.info(
-                f"DONE! Total {len(all_leads)} unique leads saved to dataset."
+                f"SUCCESS: Harvested {len(total_leads)} individual suppliers and shops into Dataset."
             )
         else:
-            Actor.log.warning("No leads found.")
+            Actor.log.warning("No leads could be extracted.")
 
 
 if __name__ == "__main__":
